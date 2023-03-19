@@ -5,7 +5,6 @@ import {
   catListGet,
   catPost,
   catPut,
-  catGetByUser,
 } from '../controllers/catController';
 import multer, {FileFilterCallback} from 'multer';
 import {body, param} from 'express-validator';
@@ -54,8 +53,6 @@ router
     catDelete
   );
 
-router
-  .route('/user')
-  .get(passport.authenticate('jwt', {session: false}), catGetByUser);
+router.route('/user');
 
 export default router;

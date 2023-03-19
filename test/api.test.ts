@@ -43,7 +43,8 @@ describe('GET /api/v1', () => {
   });
 
   // test create user
-  let token: string = '';
+  let token = '';
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let user: UserWithToken;
   it('should create a new user', async () => {
     user = await postUser(app, {
