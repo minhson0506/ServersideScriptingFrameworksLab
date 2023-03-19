@@ -108,3 +108,7 @@ dist
 
 # Visual Studio Code
 .DS_Store
+
+# upload file
+uploads/*
+!uploads/.gitkeep
