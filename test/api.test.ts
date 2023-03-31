@@ -1,35 +1,37 @@
 import app from '../src/app';
 import {
   deleteUser,
-  getCurrentUser,
   getSingleUser,
   getUser,
-  postAuthLogin,
-  postAuthLoginError,
   postUser,
   putUser,
 } from './userFunctions';
-import {User} from '../src/interfaces/User';
-import {closePool} from '../src/database/db';
+import {UserTest} from '../src/interfaces/User';
+import mongoose from 'mongoose';
 import {getNotFound} from './testFunctions';
 import {
-  adminPutCat,
   getCat,
+  getCatByBoundingBox,
+  getCatByOwner,
   getSingleCat,
   postCat,
+  postFile,
   userDeleteCat,
   userPutCat,
 } from './catFunctions';
 
-interface UserWithToken {
-  user: User;
-  token: string;
-}
+import randomstring from 'randomstring';
+import UploadMessageResponse from '../src/interfaces/UploadMessageResponse';
+import {locationInput} from '../src/interfaces/Location';
+import {CatTest} from '../src/interfaces/Cat';
 
-describe('GET /api/v1', () => {
+describe('Testing graphql api', () => {
+  beforeAll(async () => {
+    await mongoose.connect(process.env.DATABASE_URL as string);
+  });
+
   afterAll(async () => {
-    // close database connection
-    await closePool();
+    await mongoose.connection.close();
   });
 
   // test not found
@@ -37,68 +39,54 @@ describe('GET /api/v1', () => {
     await getNotFound(app);
   });
 
-  // test login error
-  it('should return error message on invalid credentials', async () => {
-    await postAuthLoginError(app);
-  });
-
   // test create user
-  let token = '';
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let user: UserWithToken;
-  it('should create a new user', async () => {
-    user = await postUser(app, {
-      user_name: 'Test User ' + new Date().toLocaleDateString('fi-FI'),
-      email: 'test@user.fi',
-      password: 'asdfQEWR1234',
-    });
-  });
+  let user: UserTest;
+  const testUser: UserTest = {
+    user_name: 'Test User ' + randomstring.generate(7),
+    email: randomstring.generate(9) + '@user.fi',
+  };
 
-  // test login
-  it('should return a user object and bearer token on valid credentials', async () => {
-    const user = await postAuthLogin(app, {
-      username: 'test@user.fi',
-      password: 'asdfQEWR1234',
-    });
-    token = user.token;
+  it('should create a new user', async () => {
+    user = await postUser(app, testUser);
   });
 
   // test get all users
-  let userId = 0;
   it('should return array of users', async () => {
-    const users: User[] = await getUser(app);
-    userId = users[0].user_id!;
+    await getUser(app);
   });
 
   // test get single user
   it('should return single user', async () => {
-    await getSingleUser(app, userId);
+    console.log('singleuser', user);
+    await getSingleUser(app, user.id!);
   });
 
   // test update user
   it('should update user', async () => {
-    await putUser(app, token);
+    await putUser(app, user.id!);
   });
 
-  // test get current user based on token
-  let owner = 0;
-  it('should return current user', async () => {
-    const user = await getCurrentUser(app, token);
-    owner = user.user_id;
-  });
-
-  // test cat upload without GPS
-  let catID = 0;
+  // test cat upload
+  let uploadData1: UploadMessageResponse;
+  let catData1: any;
   it('should upload a cat', async () => {
-    const message = await postCat(app, token, owner, 'cat.jpg');
-    catID = message.id!;
+    uploadData1 = await postFile(app);
+    catData1 = {
+      catName: 'Test Cat' + randomstring.generate(7),
+      weight: 5,
+      birthdate: new Date('2022-01-01'),
+      filename: uploadData1.data.filename,
+      location: uploadData1.data.location,
+      owner: user.id,
+    };
   });
 
-  // test cat upload with GPS
-  let catID2 = 0;
-  it('should upload a cat with GPS', async () => {
-    const message = await postCat(app, token, owner, 'picWithGPS.jpg');
-    catID2 = message.id!;
+  // test post cat data
+  let catID1: string;
+  it('should post all cat data', async () => {
+    console.log(catData1);
+    const cat = await postCat(app, catData1);
+    catID1 = cat.id!;
   });
 
   // test get all cats
@@ -108,51 +96,47 @@ describe('GET /api/v1', () => {
 
   // test get single cat
   it('should return single cat', async () => {
-    await getSingleCat(app, catID);
+    await getSingleCat(app, catID1);
   });
 
-  // modify user's cat
+  // get cats by user id
+  it('should return cats by current user', async () => {
+    await getCatByOwner(app, user.id!);
+  });
+
+  // get cats by bounding box
+  it('should return cats by bounding box', async () => {
+    const location = {
+      topRight: {
+        lat: 70.1,
+        lng: 30.8,
+      },
+      bottomLeft: {
+        lat: 60.1,
+        lng: 19.8,
+      },
+    };
+
+    await getCatByBoundingBox(app, location);
+  });
+
+  // modify cat by id
   it('should modify a cat', async () => {
-    await userPutCat(app, token, catID);
+    const newCat: CatTest = {
+      catName: 'Test Cat' + randomstring.generate(7),
+      weight: 5,
+      birthdate: new Date('2019-01-01'),
+    };
+    await userPutCat(app, newCat, catID1);
   });
 
-  // test delete user's cat
+  // test delete cat
   it('should delete a cat', async () => {
-    await userDeleteCat(app, token, catID);
+    await userDeleteCat(app, catID1);
   });
 
-  // delete GPS image
-  it('should delete GPS image', async () => {
-    await userDeleteCat(app, token, catID2);
-  });
-
-  // upload another cat for admin tests
-  it('should upload a cat for admin test', async () => {
-    const message = await postCat(app, token, owner, 'cat.jpg');
-    catID = message.id!;
-  });
-
-  // test delete user based on token
+  // test delete user based on id
   it('should delete current user', async () => {
-    await deleteUser(app, token);
-  });
-
-  // login as admin
-  it('should login as admin', async () => {
-    const user = await postAuthLogin(app, {
-      username: 'admin@metropolia.fi',
-      password: '1234',
-    });
-    token = user.token;
-  });
-
-  // test modify user's cat as admin
-  it('should modify a cat as admin', async () => {
-    await adminPutCat(app, token, catID);
-  });
-
-  // test delete user's cat as admin
-  it('should delete a cat as admin', async () => {
-    await userDeleteCat(app, token, catID);
+    await deleteUser(app, user.id!);
   });
 });

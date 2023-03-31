@@ -1,188 +1,202 @@
+/* eslint-disable node/no-unpublished-import */
 import request from 'supertest';
 import expect from 'expect';
-import {User} from '../src/interfaces/User';
+import {UserTest} from '../src/interfaces/User';
 import ErrorResponse from '../src/interfaces/ErrorResponse';
 
-interface UserWithToken {
-  user: User;
-  token: string;
-}
-
-const getUser = (url: string | Function): Promise<User[]> => {
+// get user from graphql query users
+const getUser = (url: string | Function): Promise<UserTest[]> => {
   return new Promise((resolve, reject) => {
     request(url)
-      .get('/api/v1/user')
+      .post('/graphql')
+      .set('Content-type', 'application/json')
+      .send({
+        query: '{users{id user_name email}}',
+      })
       .expect(200, (err, response) => {
         if (err) {
           reject(err);
         } else {
-          const users: User[] = response.body;
-          users.forEach((user) => {
-            expect(user).toHaveProperty('user_id');
-            expect(user).toHaveProperty('user_name');
-            expect(user).toHaveProperty('email');
-            expect(user).toHaveProperty('role');
-          });
-          resolve(users);
+          const users = response.body.data.users;
+          expect(users).toBeInstanceOf(Array);
+          expect(users[0]).toHaveProperty('id');
+          expect(users[0]).toHaveProperty('user_name');
+          expect(users[0]).toHaveProperty('email');
+          resolve(response.body.data.users);
         }
       });
   });
 };
 
-const getSingleUser = (url: string | Function, id: number): Promise<User> => {
+/* test for graphql query
+query UserById($userByIdId: ID!) {
+  userById(id: $userByIdId) {
+    user_name
+    id
+    email
+  }
+}
+*/
+const getSingleUser = (
+  url: string | Function,
+  id: string
+): Promise<UserTest> => {
   return new Promise((resolve, reject) => {
     request(url)
-      .get('/api/v1/user/' + id)
+      .post('/graphql')
+      .set('Content-type', 'application/json')
+      .send({
+        query: `query UserById($userByIdId: ID!) {
+          userById(id: $userByIdId) {
+            user_name
+            id
+            email
+          }
+        }`,
+        variables: {
+          userByIdId: id,
+        },
+      })
       .expect(200, (err, response) => {
         if (err) {
           reject(err);
         } else {
-          const user = response.body;
-          expect(user).toHaveProperty('user_id');
+          const user = response.body.data.userById;
+          expect(user.id).toBe(id);
           expect(user).toHaveProperty('user_name');
           expect(user).toHaveProperty('email');
-          expect(user).toHaveProperty('role');
-          resolve(response.body);
+          resolve(response.body.data.userById);
         }
       });
   });
 };
 
+/* test for graphql query
+mutation CreateUser($userName: String!, $email: String!) {
+  createUser(user_name: $userName, email: $email) {
+    email
+    id
+    user_name
+  }
+}
+*/
 const postUser = (
   url: string | Function,
-  user: Omit<User, 'user_id' | 'role'>
-): Promise<UserWithToken> => {
+  user: UserTest
+): Promise<UserTest> => {
   return new Promise((resolve, reject) => {
     request(url)
-      .post('/api/v1/user/')
+      .post('/graphql')
       .set('Content-type', 'application/json')
-      .send(user)
-      .expect('Content-Type', /json/)
-      .expect(200, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          expect(response.body).toHaveProperty('message');
-          expect(response.body).toHaveProperty('user_id');
-          resolve(response.body);
-        }
-      });
-  });
-};
-
-const putUser = (url: string | Function, token: string) => {
-  return new Promise((resolve, reject) => {
-    request(url)
-      .put('/api/v1/user/')
-      .set('Content-type', 'application/json')
-      .set('Authorization', 'Bearer ' + token)
       .send({
-        user_name: 'Test User ' + new Date().toISOString(),
-      })
-      .expect('Content-Type', /json/)
-      .expect(200, {message: 'user modified'}, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(response.body);
-        }
-      });
-  });
-};
-
-const getCurrentUser = (
-  url: string | Function,
-  token: string
-): Promise<User> => {
-  return new Promise((resolve, reject) => {
-    request(url)
-      .get('/api/v1/user/token')
-      .set('Authorization', 'Bearer ' + token)
-      .expect(200, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          const user = response.body;
-          expect(user).toHaveProperty('user_id');
-          expect(user).toHaveProperty('user_name');
-          expect(user).toHaveProperty('email');
-          expect(user).toHaveProperty('role');
-          resolve(response.body);
-        }
-      });
-  });
-};
-
-const postAuthLogin = (
-  url: string | Function,
-  user: {username: string; password: string}
-): Promise<UserWithToken> => {
-  return new Promise((resolve, reject) => {
-    request(url)
-      .post('/api/v1/auth/login')
-      .send(user)
-      .expect(200, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          expect(response.body).toHaveProperty('user');
-          expect(response.body).toHaveProperty('token');
-          const user: User = response.body.user;
-          expect(user).toHaveProperty('user_name');
-          expect(user).toHaveProperty('email');
-          expect(user).toHaveProperty('role');
-          expect(user).toHaveProperty('user_id');
-          resolve(response.body);
-        }
-      });
-  });
-};
-
-const postAuthLoginError = (url: string | Function): Promise<ErrorResponse> => {
-  return new Promise((resolve, reject) => {
-    request(url)
-      .post('/api/v1/auth/login')
-      .send({
-        username: 'wrong@example.com',
-        password: 'wrongpassword',
+        query: `mutation CreateUser($userName: String!, $email: String!) {
+          createUser(user_name: $userName, email: $email) {
+            email
+            id
+            user_name
+          }
+        }`,
+        variables: {
+          userName: user.user_name,
+          email: user.email,
+        },
       })
       .expect(200, (err, response) => {
         if (err) {
           reject(err);
         } else {
-          expect(response.body).toHaveProperty('message');
-          expect(response.body).toHaveProperty('stack');
-          resolve(response.body);
+          const user = response.body.data.createUser;
+          expect(user.user_name).toBe(user.user_name);
+          expect(user.email).toBe(user.email);
+          expect(user).toHaveProperty('id');
+          resolve(response.body.data.createUser);
         }
       });
   });
 };
+
+/* test for graphql query
+mutation CreateUser($userName: String!, $email: String!) {
+  createUser(user_name: $userName, email: $email) {
+    email
+    id
+    user_name
+  }
+}
+*/
+const putUser = (url: string | Function, id: string) => {
+  return new Promise((resolve, reject) => {
+    const newValue = 'Test User ' + new Date().toISOString();
+    request(url)
+      .post('/graphql')
+      .set('Content-type', 'application/json')
+      .send({
+        query: `mutation UpdateUser($userName: String, $updateUserId: ID!) {
+          updateUser(user_name: $userName, id: $updateUserId) {
+            email
+            id
+            user_name
+          }
+        }`,
+        variables: {
+          userName: newValue,
+          updateUserId: id,
+        },
+      })
+      .expect(200, (err, response) => {
+        if (err) {
+          reject(err);
+        } else {
+          const user = response.body.data.updateUser;
+          expect(user.user_name).toBe(newValue);
+          expect(user).toHaveProperty('id');
+          expect(user).toHaveProperty('email');
+          resolve(response.body.data.updateUser);
+        }
+      });
+  });
+};
+
+/* test for graphql query
+mutation DeleteUser($deleteUserId: ID!) {
+  deleteUser(id: $deleteUserId) {
+    email
+    id
+    user_name
+  }
+}
+*/
 
 const deleteUser = (
   url: string | Function,
-  token: string
+  id: string
 ): Promise<ErrorResponse> => {
   return new Promise((resolve, reject) => {
     request(url)
-      .delete('/api/v1/user')
-      .set('Authorization', 'Bearer ' + token)
-      .expect(200, {message: 'user deleted'}, (err, response) => {
+      .post('/graphql')
+      .set('Content-type', 'application/json')
+      .send({
+        query: `mutation DeleteUser($deleteUserId: ID!) {
+          deleteUser(id: $deleteUserId) {
+            email
+            id
+            user_name
+          }
+        }`,
+        variables: {
+          deleteUserId: id,
+        },
+      })
+      .expect(200, (err, response) => {
         if (err) {
           reject(err);
         } else {
-          resolve(response.body);
+          const user = response.body.data.deleteUser;
+          expect(user.id).toBe(id);
+          resolve(response.body.data.deleteUser);
         }
       });
   });
 };
 
-export {
-  getUser,
-  getSingleUser,
-  getCurrentUser,
-  postUser,
-  putUser,
-  postAuthLogin,
-  postAuthLoginError,
-  deleteUser,
-};
+export {getUser, getSingleUser, postUser, putUser, deleteUser};

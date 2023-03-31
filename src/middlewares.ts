@@ -4,7 +4,6 @@ import sharp from 'sharp';
 import {ExifImage} from 'exif';
 import ErrorResponse from './interfaces/ErrorResponse';
 import CustomError from './classes/CustomError';
-// import chalk from 'chalk';
 
 // convert GPS coordinates to decimal format
 // for longitude, send exifData.gps.GPSLongitude, exifData.gps.GPSLongitudeRef
@@ -25,7 +24,7 @@ const errorHandler = (
   res: Response<ErrorResponse>,
   next: NextFunction
 ) => {
-  // console.error('errorHandler', chalk.red(err.stack));
+  console.error('errorHandler', err.message);
   res.status(err.status || 500);
   res.json({
     message: err.message,
@@ -34,6 +33,10 @@ const errorHandler = (
 };
 
 const getCoordinates = (req: Request, res: Response, next: NextFunction) => {
+  const defaultPoint = {
+    type: 'Point',
+    coordinates: [24, 61],
+  };
   try {
     console.log(req.file?.path);
     // TODO: Use node-exif to get longitude and latitude from imgFile
@@ -41,7 +44,7 @@ const getCoordinates = (req: Request, res: Response, next: NextFunction) => {
     new ExifImage({image: req.file?.path}, (error, exifData) => {
       if (error) {
         console.log('eka', error);
-        res.locals.coords = [60, 24];
+        res.locals.coords = defaultPoint;
         next();
       } else {
         // console.log('exif data', exifData);
@@ -54,19 +57,22 @@ const getCoordinates = (req: Request, res: Response, next: NextFunction) => {
             exifData.gps.GPSLatitude || [0, 0, 0],
             exifData.gps.GPSLatitudeRef || 'E'
           );
-          const coordinates = [lat, lon];
+          const coordinates = {
+            type: 'Point',
+            coordinates: [lon, lat],
+          };
           res.locals.coords = coordinates;
           next();
         } catch (err) {
           console.log('toka', err);
-          res.locals.coords = [60, 24];
+          res.locals.coords = defaultPoint;
           next();
         }
       }
     });
   } catch (error) {
     console.log('kolmas', error);
-    res.locals.coords = [60, 24];
+    res.locals.coords = defaultPoint;
     next();
   }
 };
